@@ -9,7 +9,8 @@ if (!process.env.MONGODB_URI) {
 }
 const config = {
     PORT: process.env.PORT || 8000,
-    MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/myapp'
+    MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/myapp',
+    JWT_SECRET: process.env.JWT_SECRET || 'dev-secret',
 };
 
 export default config;

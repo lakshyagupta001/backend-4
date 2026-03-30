@@ -5,7 +5,7 @@ import { toRegisterDTO, toLoginDTO } from '../dtos/user.dto.js';
 import {
     validateRegisterInput,
     validateLoginInput,
-} from '../validation/user.validation.js';
+} from '../validations/user.validation.js';
 import {
     createUserDAO,
     findUserByEmailDAO,
@@ -19,7 +19,16 @@ export const registerUserService = async (payload) => {
     const existingUser = await findUserByEmailDAO(dto.email);
 
     if (existingUser) {
-        throw new AppError('email already registered', 409);
+        throw new AppError('email already registered', 409);//If you only write new AppError(...):
+        //It just creates an error object.
+        //Execution continues normally.
+        //Your asyncWrapper and error middleware will not be triggered.
+        
+        // Service throws error.
+        // Promise rejects.
+        // asyncWrapper catches and calls next(error).
+        // Global error middleware sends proper response.
+
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);

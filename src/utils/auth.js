@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
+import config from '../configs/env.js';
 
 export const signToken = (userId) =>
-    jwt.sign({ id: userId }, process.env.JWT_SECRET || 'dev-secret', {
+    jwt.sign({ id: userId }, config.JWT_SECRET || 'dev-secret', {
         expiresIn: '7d',
     });
