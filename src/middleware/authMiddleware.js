@@ -1,7 +1,6 @@
-import jwt from 'jsonwebtoken';
-import config from '../configs/env.js';
 import { findUserByIdDAO } from '../daos/user.dao.js';
 import AppError from '../utils/appError.js';
+import { verifyAccessToken } from '../utils/auth.js';
 
 const protect = async (req, res, next) => {
     const authHeader = req.headers.authorization;
@@ -14,11 +13,7 @@ const protect = async (req, res, next) => {
 
     let decoded;
 
-    try {
-        decoded = jwt.verify(token, config.JWT_SECRET || 'dev-secret');
-    } catch (error) {
-        return next(new AppError('invalid or expired token', 401));
-    }
+    decoded = verifyAccessToken(token);
 
     const currentUser = await findUserByIdDAO(decoded.id);
 
@@ -26,7 +21,6 @@ const protect = async (req, res, next) => {
         return next(new AppError('user belonging to this token no longer exists', 401));
     }
 
-    // Make the authenticated user available to later middleware/controllers.
     req.user = currentUser;
     next();
 };
