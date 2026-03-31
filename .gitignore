@@ -1,10 +1,10 @@
+.env
+.env.*
 node_modules/
 dist/
 build/
 coverage/
-.env
-.env.*
-
+.DS_Store
 
 // dist is created during build (Vite, Webpack, Rollup, etc.)
 // build is made in the build process, in tool like react-create-app
