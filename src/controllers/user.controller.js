@@ -5,18 +5,20 @@ import {
 	getUserProfileService,
 	refreshTokenService,
 	logoutUserService,
+	logoutAllService,
 } from '../services/user.service.js';
 
 // Cookie options — httpOnly so JS cannot access the token
 const COOKIE_OPTIONS = {
 	httpOnly: true,
-	secure: process.env.NODE_ENV === 'production', // HTTPS only in prod
+	secure: process.env.NODE_ENV === 'production',
 	sameSite: 'strict',
-	maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+	maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
 export const registerUser = async (req, res) => {
-	const data = await registerUserService(req.body);
+	const reqMeta = { userAgent: req.get('user-agent'), ipAddress: req.ip };
+	const data = await registerUserService(req.body, reqMeta);
 	res.cookie('refreshToken', data.refreshToken, COOKIE_OPTIONS);
 
 	res.status(201).json({
@@ -30,7 +32,8 @@ export const registerUser = async (req, res) => {
 };
 
 export const loginUser = async (req, res) => {
-	const data = await loginUserService(req.body);
+	const reqMeta = { userAgent: req.get('user-agent'), ipAddress: req.ip };
+	const data = await loginUserService(req.body, reqMeta);
 	res.cookie('refreshToken', data.refreshToken, COOKIE_OPTIONS);
 
 	res.status(200).json({
@@ -44,23 +47,37 @@ export const loginUser = async (req, res) => {
 };
 
 export const refreshAccessToken = async (req, res) => {
-	// Token comes from the httpOnly cookie
-	const token = req.cookies.refreshToken;
-	const data = await refreshTokenService(token);
+	const rawToken = req.cookies.refreshToken;
+	const reqMeta = { userAgent: req.get('user-agent'), ipAddress: req.ip };
+	const data = await refreshTokenService(rawToken, reqMeta);
+	res.cookie('refreshToken', data.refreshToken, COOKIE_OPTIONS);
 
 	res.status(200).json({
 		status: 'success',
-		data,
+		data: {
+			accessToken: data.accessToken,
+		},
 	});
 };
 
 export const logoutUser = async (req, res) => {
-	await logoutUserService(req.user._id);
+	// req.sessionId is set by the auth middleware (decoded from JWT)
+	await logoutUserService(req.sessionId);
 	res.clearCookie('refreshToken', COOKIE_OPTIONS);
 
 	res.status(200).json({
 		status: 'success',
 		message: 'logged out successfully',
+	});
+};
+
+export const logoutAll = async (req, res) => {
+	await logoutAllService(req.user._id);
+	res.clearCookie('refreshToken', COOKIE_OPTIONS);
+
+	res.status(200).json({
+		status: 'success',
+		message: 'logged out from all devices',
 	});
 };
 
@@ -86,4 +103,3 @@ export const getUserProfile = async (req, res) => {
 		},
 	});
 };
-

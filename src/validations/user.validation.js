@@ -1,39 +1,29 @@
-import AppError from '../utils/appError.js';
+import { z } from 'zod';
 
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const emailSchema = z
+    .string({ required_error: 'email is required' })
+    .email('invalid email format')
+    .trim()
+    .toLowerCase();
 
-export const validateRegisterInput = (payload) => {
-    if (!payload || typeof payload !== 'object') {
-        throw new AppError('request body is required', 400);
-    }
+const passwordSchema = z
+    .string({ required_error: 'password is required' })
+    .min(6, 'password must be at least 6 characters');
 
-    const { name, email, password } = payload;
+export const registerSchema = z.object({
+    body: z.object({
+        name: z
+            .string({ required_error: 'name is required' })
+            .trim()
+            .min(1, 'name cannot be empty'),
+        email: emailSchema,
+        password: passwordSchema,
+    }),
+});
 
-    if (!name || !email || !password) {
-        throw new AppError('name, email and password are required', 400);
-    }
-
-    if (typeof email !== 'string' || !emailRegex.test(email.trim().toLowerCase())) {
-        throw new AppError('invalid email format', 400);
-    }
-
-    if (typeof password !== 'string' || password.length < 6) {
-        throw new AppError('password must be at least 6 characters', 400);
-    }
-};
-
-export const validateLoginInput = (payload) => {
-    if (!payload || typeof payload !== 'object') {
-        throw new AppError('request body is required', 400);
-    }
-
-    const { email, password } = payload;
-
-    if (!email || !password) {
-        throw new AppError('email and password are required', 400);
-    }
-
-    if (typeof email !== 'string' || !emailRegex.test(email.trim().toLowerCase())) {
-        throw new AppError('invalid email format', 400);
-    }
-};
+export const loginSchema = z.object({
+    body: z.object({
+        email: emailSchema,
+        password: z.string({ required_error: 'password is required' }).min(1, 'password is required'),
+    }),
+});

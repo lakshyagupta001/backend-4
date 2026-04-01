@@ -1,24 +1,44 @@
 import crypto from 'crypto';
 import AppError from '../utils/appError.js';
-import { accessToken, refreshToken, verifyRefreshToken } from '../utils/auth.js';
+import { accessToken, refreshToken, verifyRefreshToken, hashToken } from '../utils/auth.js';
 import { toRegisterDTO, toLoginDTO } from '../dtos/user.dto.js';
-import {
-    validateRegisterInput,
-    validateLoginInput,
-} from '../validations/user.validation.js';
+
 import {
     createUserDAO,
     findUserByEmailDAO,
     findUserByEmailWithPasswordDAO,
     findUserByIdDAO,
     getAllUsersDAO,
-    saveRefreshTokenDAO,
-    findUserByRefreshTokenDAO,
-    clearRefreshTokenDAO,
+    createSessionDAO,
+    findActiveSessionDAO,
+    revokeSessionDAO,
+    revokeAllSessionsDAO,
 } from '../daos/user.dao.js';
 
-export const registerUserService = async (payload) => {
-    validateRegisterInput(payload);
+// ──── Helper: create a session and return tokens ────
+// Used by both register and login to avoid code duplication
+const createSessionAndTokens = async (userId, reqMeta) => {
+    const rawRefreshToken = refreshToken(userId);
+    const hashedRefreshToken = hashToken(rawRefreshToken);
+
+    const session = await createSessionDAO({
+        userId,
+        refreshToken: hashedRefreshToken,
+        userAgent: reqMeta.userAgent || 'unknown',
+        ipAddress: reqMeta.ipAddress || 'unknown',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+    });
+
+    const newAccessToken = accessToken(userId, session._id);
+
+    return {
+        accessToken: newAccessToken,
+        refreshToken: rawRefreshToken, // raw token goes to the client (cookie)
+    };
+};
+
+// ──── Register ────
+export const registerUserService = async (payload, reqMeta) => {
     const dto = toRegisterDTO(payload);
     const existingUser = await findUserByEmailDAO(dto.email);
 
@@ -35,15 +55,13 @@ export const registerUserService = async (payload) => {
         name: dto.name,
         email: dto.email,
         password: hashedPassword,
-        salt: salt,
+        salt,
     });
 
-    const newRefreshToken = refreshToken(user._id);
-    await saveRefreshTokenDAO(user._id, newRefreshToken);
+    const tokens = await createSessionAndTokens(user._id, reqMeta);
 
     return {
-        accessToken: accessToken(user._id),
-        refreshToken: newRefreshToken,
+        ...tokens,
         user: {
             id: user._id,
             name: user.name,
@@ -52,8 +70,8 @@ export const registerUserService = async (payload) => {
     };
 };
 
-export const loginUserService = async (payload) => {
-    validateLoginInput(payload);
+// ──── Login ────
+export const loginUserService = async (payload, reqMeta) => {
     const dto = toLoginDTO(payload);
     const user = await findUserByEmailWithPasswordDAO(dto.email);
 
@@ -70,12 +88,10 @@ export const loginUserService = async (payload) => {
         throw new AppError('invalid email or password', 401);
     }
 
-    const newRefreshToken = refreshToken(user._id);
-    await saveRefreshTokenDAO(user._id, newRefreshToken);
+    const tokens = await createSessionAndTokens(user._id, reqMeta);
 
     return {
-        accessToken: accessToken(user._id),
-        refreshToken: newRefreshToken,
+        ...tokens,
         user: {
             id: user._id,
             name: user.name,
@@ -84,32 +100,46 @@ export const loginUserService = async (payload) => {
     };
 };
 
-export const refreshTokenService = async (token) => {
-    if (!token) {
+// ──── Refresh Token (with rotation) ────
+export const refreshTokenService = async (rawToken, reqMeta) => {
+    if (!rawToken) {
         throw new AppError('refresh token is required', 401);
     }
 
     // 1. Verify JWT signature & expiry
-    const decoded = verifyRefreshToken(token);
+    const decoded = verifyRefreshToken(rawToken);
 
-    // 2. Check token exists in DB (prevents use after logout)
-    const user = await findUserByRefreshTokenDAO(token);
-    if (!user) {
+    // 2. Hash the incoming token and find matching active session
+    const hashedToken = hashToken(rawToken);
+    const session = await findActiveSessionDAO(decoded.id, hashedToken);
+
+    if (!session) {
         throw new AppError('refresh token is invalid or has been revoked', 401);
     }
 
-    // 3. Issue a new access token
-    const newAccessToken = accessToken(decoded.id);
+    // 3. Revoke the old session (one-time use)
+    await revokeSessionDAO(session._id);
 
-    return { accessToken: newAccessToken };
+    // 4. Create a brand new session (token rotation)
+    const tokens = await createSessionAndTokens(decoded.id, reqMeta);
+
+    return tokens;
 };
 
-export const logoutUserService = async (userId) => {
-    await clearRefreshTokenDAO(userId);
+// ──── Logout (single device) ────
+export const logoutUserService = async (sessionId) => {
+    await revokeSessionDAO(sessionId);
 };
 
+// ──── Logout All Devices ────
+export const logoutAllService = async (userId) => {
+    await revokeAllSessionsDAO(userId);
+};
+
+// ──── Get All Users ────
 export const getAllUsersService = async () => getAllUsersDAO();
 
+// ──── Get User Profile ────
 export const getUserProfileService = async (userId) => {
     const user = await findUserByIdDAO(userId);
     if (!user) {
@@ -121,4 +151,3 @@ export const getUserProfileService = async (userId) => {
         email: user.email,
     };
 };
-

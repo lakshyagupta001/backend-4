@@ -1,5 +1,7 @@
-import User from '../models/user.models.js';
+import User from '../models/user.model.js';
+import Session from '../models/session.model.js';
 
+// ──── User DAOs ────
 export const createUserDAO = async (payload) => User.create(payload);
 
 export const findUserByEmailDAO = async (email) => User.findOne({ email });
@@ -13,11 +15,21 @@ export const findUserByEmailWithPasswordDAO = async (email) =>
 export const getAllUsersDAO = async () =>
     User.find({}, { password: 0 }).sort({ createdAt: -1 });
 
-export const saveRefreshTokenDAO = async (userId, token) =>
-    User.findByIdAndUpdate(userId, { refreshToken: token });
+// ──── Session DAOs ────
+export const createSessionDAO = async (payload) => Session.create(payload);
 
-export const findUserByRefreshTokenDAO = async (token) =>
-    User.findOne({ refreshToken: token });
+// Find a session by its _id (used by auth middleware to check isRevoked)
+export const findSessionByIdDAO = async (sessionId) =>
+    Session.findById(sessionId);
 
-export const clearRefreshTokenDAO = async (userId) =>
-    User.findByIdAndUpdate(userId, { refreshToken: null });
+// Find an active (non-revoked) session by userId and hashed token
+export const findActiveSessionDAO = async (userId, hashedToken) =>
+    Session.findOne({ userId, refreshToken: hashedToken, isRevoked: false });
+
+// Revoke a single session (logout from one device)
+export const revokeSessionDAO = async (sessionId) =>
+    Session.findByIdAndUpdate(sessionId, { isRevoked: true });
+
+// Revoke ALL sessions for a user (logout from all devices)
+export const revokeAllSessionsDAO = async (userId) =>
+    Session.updateMany({ userId, isRevoked: false }, { isRevoked: true });

@@ -1,6 +1,6 @@
 import express from 'express';
 import morgan from 'morgan';
-import errorHandler from './middleware/errorHandling.js';
+import errorHandler from './middleware/errorHandling.middleware.js';
 import userRouter from './routes/user.route.js';
 import cookieParser from 'cookie-parser';
 
