@@ -109,10 +109,10 @@ Server starts at `http://localhost:8000`
 | `PORT` | No | Port to run the server on. Defaults to `8000` |
 | `MONGODB_URI` | **Yes** | Full MongoDB connection string |
 | `ACCESS_SECRET` | **Yes** | Secret key to sign access tokens (JWT) |
-| `REFRESH_SECRET` | No | Secret key to sign refresh tokens. Defaults to a hardcoded fallback |
+| `REFRESH_SECRET` | **Yes** | Secret key to sign refresh tokens (JWT) |
 | `NODE_ENV` | No | Set to `production` to enable secure cookies |
 
-> `env.js` will **throw and crash the server** at startup if `MONGODB_URI` or `ACCESS_SECRET` is missing.
+> `env.js` will **throw and crash the server** at startup if `MONGODB_URI`, `ACCESS_SECRET`, or `REFRESH_SECRET` is missing.
 
 ---
 
@@ -516,59 +516,6 @@ REGISTER / LOGIN
 | Stateful logout | Sessions linked to access tokens via `sessionId` — logout is instant |
 | Session TTL | MongoDB auto-deletes sessions after 7 days |
 | User enumeration prevention | Login returns same error message for wrong email or wrong password |
-
----
-
-## ⚠️ Issues & Suggestions
-
-### 1. `bcryptjs` is installed but never used
-**Issue:** `package.json` lists `bcryptjs` as a dependency, but passwords are hashed using the built-in `crypto` module (PBKDF2).
-**Suggestion:** Either remove `bcryptjs` from `package.json` to avoid dead dependencies, or decide on one hashing strategy and stick to it. Both are fine — PBKDF2 is perfectly valid.
-
-### 2. No `REFRESH_SECRET` validation at startup
-**Issue:** `env.js` throws if `MONGODB_URI` or `ACCESS_SECRET` is missing, but `REFRESH_SECRET` silently falls back to a weak hardcoded string.
-**Suggestion:** Add a check for `REFRESH_SECRET` the same way:
-```js
-if (!process.env.REFRESH_SECRET) throw new AppError('REFRESH_SECRET is not defined');
-```
-
-### 3. `process.exit(1)` is unreachable in `db.js`
-**Issue:** In `connectDB`, the line `process.exit(1)` comes after `throw new Error(...)`. The throw will unwind the stack before `exit` is ever reached.
-**Suggestion:** Replace the throw with `process.exit(1)` directly, or use the uncaught exception handler in `server.js`.
-
-### 4. `GET /api/users/` returns ALL users — no pagination or role guard
-**Issue:** Any authenticated user can fetch the full user list. In production this is a data leak.
-**Suggestion:** Add a role field to the User model (e.g., `role: { type: String, enum: ['user', 'admin'] }`) and add an `authorize('admin')` middleware on that route.
-
-### 5. No `dev` script in `package.json`
-**Issue:** Only `npm start` exists. During development there is no auto-restart on file changes.
-**Suggestion:** Add a dev script:
-```json
-"dev": "node --watch server.js"
-```
-Or install `nodemon` and use `"dev": "nodemon server.js"`.
-
-### 6. Commented-out code in `validation.middleware.js`
-**Issue:** The old version of the middleware (lines 40–62) is left as a comment block.
-**Suggestion:** Delete it. Git history preserves it if you ever need to look back.
-
-### 7. No rate limiting
-**Issue:** `POST /login` and `POST /refresh` have no request rate limiting. An attacker can brute-force passwords or spam the refresh endpoint.
-**Suggestion:** Add `express-rate-limit`:
-```js
-import rateLimit from 'express-rate-limit';
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
-router.post('/login', loginLimiter, validate(loginSchema), asyncWrapper(loginUser));
-```
-
-### 8. No CORS configuration
-**Issue:** `app.js` has no CORS middleware. If a frontend on a different origin calls this API, it will be blocked by the browser.
-**Suggestion:** Add the `cors` package:
-```js
-import cors from 'cors';
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
-```
-`credentials: true` is required for cookies to work cross-origin.
 
 ---
 

@@ -11,11 +11,15 @@ if (!process.env.ACCESS_SECRET) {
     throw new AppError('ACCESS_SECRET environment variable is not defined.');
 }
 
+if (!process.env.REFRESH_SECRET) {
+    throw new AppError('REFRESH_SECRET environment variable is not defined.');
+}
+
 const config = {
     PORT: process.env.PORT || 8000,
     MONGODB_URI: process.env.MONGODB_URI,
-    ACCESS_SECRET: process.env.ACCESS_SECRET || 'your_jwt_access_secret_key',
-    REFRESH_SECRET: process.env.REFRESH_SECRET || 'your_jwt_refresh_secret_key',
+    ACCESS_SECRET: process.env.ACCESS_SECRET,
+    REFRESH_SECRET: process.env.REFRESH_SECRET,
 };
 
 export default config;
