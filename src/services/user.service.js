@@ -10,7 +10,8 @@ import {
     findUserByIdDAO,
     getAllUsersDAO,
     createSessionDAO,
-    findActiveSessionDAO,
+    findSessionByHashDAO,
+    // findActiveSessionDAO,
     revokeSessionDAO,
     revokeAllSessionsDAO,
 } from '../daos/user.dao.js';
@@ -100,7 +101,7 @@ export const loginUserService = async (payload, reqMeta) => {
     };
 };
 
-// ──── Refresh Token (with rotation) ────
+// ──── Refresh Token (with rotation + reuse detection) ────
 export const refreshTokenService = async (rawToken, reqMeta) => {
     if (!rawToken) {
         throw new AppError('refresh token is required', 401);
@@ -109,12 +110,25 @@ export const refreshTokenService = async (rawToken, reqMeta) => {
     // 1. Verify JWT signature & expiry
     const decoded = verifyRefreshToken(rawToken);
 
-    // 2. Hash the incoming token and find matching active session
+    // 2. Hash the incoming token and look for the session (active or not)
     const hashedToken = hashToken(rawToken);
-    const session = await findActiveSessionDAO(decoded.id, hashedToken);
+    const session = await findSessionByHashDAO(decoded.id, hashedToken);
 
     if (!session) {
-        throw new AppError('refresh token is invalid or has been revoked', 401);
+        // Token doesn't belong to any session at all — outright invalid
+        throw new AppError('refresh token is invalid', 401);
+    }
+
+    if (session.isRevoked) {
+        // ⚠️  Token reuse detected — this token was already consumed.
+        // A legitimate client never sends a used token, so this means
+        // the token was either stolen or replayed. Nuke ALL sessions
+        // for this user to force a full re-login on every device.
+        await revokeAllSessionsDAO(decoded.id);
+        throw new AppError(
+            'refresh token reuse detected — all sessions have been revoked',
+            401
+        );
     }
 
     // 3. Revoke the old session (one-time use)

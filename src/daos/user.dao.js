@@ -22,6 +22,11 @@ export const createSessionDAO = async (payload) => Session.create(payload);
 export const findSessionByIdDAO = async (sessionId) =>
     Session.findById(sessionId);
 
+// Find a session by userId and hashed token regardless of revocation status
+// Used for reuse-detection: distinguishes "token never existed" vs "token already used"
+export const findSessionByHashDAO = async (userId, hashedToken) =>
+    Session.findOne({ userId, refreshToken: hashedToken });
+
 // Find an active (non-revoked) session by userId and hashed token
 export const findActiveSessionDAO = async (userId, hashedToken) =>
     Session.findOne({ userId, refreshToken: hashedToken, isRevoked: false });
